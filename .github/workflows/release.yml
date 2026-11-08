@@ -93,16 +93,17 @@ jobs:
       - name: Build ${{ matrix.target }}
         run: make -j"$(nproc)"
 
-      - name: Pack ${{ matrix.target }}
+      - name: Copy raw firmware files (isolated subdir)
         run: |
-          mkdir release
-          cp -rf bin/targets/airoha/${{ matrix.target }}/* release/
+          mkdir -p release/${{ matrix.target }}
+          # -L 跟随软链接，复制真实固件文件
+          cp -L bin/targets/airoha/${{ matrix.target }}/* release/${{ matrix.target }}/
 
-      - name: Upload ${{ matrix.target }}
+      - name: Upload ${{ matrix.target }} artifact
         uses: actions/upload-artifact@v4
         with:
           name: ponwrt-${{ matrix.target }}
-          path: release/*.tar.zst
+          path: release/
           if-no-files-found: error
           retention-days: 7
 
@@ -114,16 +115,16 @@ jobs:
       contents: write
 
     steps:
-      - name: Download firmware archives
+      - name: Download firmware artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: ponwrt-*
           path: release
           merge-multiple: true
 
-      - name: Create checksums
+      - name: Create sha256 checksums
         working-directory: release
-        run: sha256sum *.tar.zst > sha256sums
+        run: sha256sum */* > sha256sums
 
       - name: Create GitHub release
         env:
@@ -133,7 +134,7 @@ jobs:
         run: |
           args=(
             "$RELEASE_TAG"
-            release/*.tar.zst
+            release/*
             release/sha256sums
             --repo "$GITHUB_REPOSITORY"
             --target "$GITHUB_SHA"
