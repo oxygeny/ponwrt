@@ -96,8 +96,7 @@ jobs:
       - name: Pack ${{ matrix.target }}
         run: |
           mkdir release
-          tar --zstd -cf "release/ponwrt-${{ matrix.target }}.tar.zst" \
-            -C bin/targets/airoha "${{ matrix.target }}"
+          cp -rf bin/targets/airoha/${{ matrix.target }}/* release/
 
       - name: Upload ${{ matrix.target }}
         uses: actions/upload-artifact@v4
