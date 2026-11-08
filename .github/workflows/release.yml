@@ -69,6 +69,7 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/oxygeny/luci-app-airoha-npu.git package/luci-app-airoha-npu
 
+
       - name: Install feeds
         run: |
           ./scripts/feeds update -a
@@ -97,11 +98,10 @@ jobs:
       - name: Build ${{ matrix.target }}
         run: make -j"$(nproc)"
 
-      - name: Copy raw firmware files (isolated subdir)
+      - name: Copy raw firmware files (isolated subdir, skip subdirs)
         run: |
           mkdir -p release/${{ matrix.target }}
-          # -L 跟随软链接，复制真实固件文件
-          cp -L bin/targets/airoha/${{ matrix.target }}/* release/${{ matrix.target }}/
+          find bin/targets/airoha/${{ matrix.target }} -maxdepth 1 -type f -exec cp -L {} release/${{ matrix.target }}/ \;
 
       - name: Upload ${{ matrix.target }} artifact
         uses: actions/upload-artifact@v4
@@ -126,20 +126,32 @@ jobs:
           path: release
           merge-multiple: true
 
-      - name: Create sha256 checksums
-        working-directory: release
-        run: sha256sum */* > sha256sums
-
+      - name: Flatten files, prefix with target name
+        run: |
+          cd release
+          mkdir -p out
+          for d in */; do
+            target="${d%/}"
+            for f in "$d"*; do
+              if [ -f "$f" ]; then
+                fn=$(basename "$f")
+                cp -L "$f" "out/${target}-${fn}"
+              fi
+            done
+          done
+          cd out
+          sha256sum * > ../sha256sums
+          mv ../sha256sums ./
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
           PRERELEASE: ${{ inputs.prerelease }}
         run: |
+          cd release/out
           args=(
             "$RELEASE_TAG"
-            release/*
-            release/sha256sums
+            *
             --repo "$GITHUB_REPOSITORY"
             --target "$GITHUB_SHA"
             --title "PonWrt $RELEASE_TAG"
